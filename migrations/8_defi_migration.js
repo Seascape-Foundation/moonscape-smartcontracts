@@ -14,7 +14,9 @@ module.exports = async function(deployer, network) {
 
     // console.log(`Staking Token ${token} between ${new Date(startTime * 1000)} and ${new Date(endTime * 1000)}`);
 
-    await deployer.deploy(Defi);
+    let nftAddress = "0x9ceAB9b5530762DE5409F2715e85663405129e54";
+
+    await deployer.deploy(Defi, nftAddress);
 
     console.log(`Moonscape DeFi was deployed on ${Defi.address}`);
 };
