@@ -20,7 +20,6 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     uint public sessionId;
     uint public stakeId;
     address public verifier;
-    uint public nonce;
 
     struct Session {
         uint startTime; // session start time
@@ -47,6 +46,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     mapping(bytes32 => uint) public keyToId;                    //bytes32 key(stakeKeyOf(sessionId,stakeId)  => stakeId
     mapping(bytes32 => mapping(address => bool)) public receiveBonus; //bytes32 key(stakeKeyOf(sessionId,stakeId)=> weallet address => bool
     mapping(uint => mapping(uint => TokenChange)) public changeMoondust; //sessionId => typeId => TokenChange
+    mapping(address => uint) public nonce;
 
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
     event PauseSession(uint indexed sessionId);
@@ -143,14 +143,14 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(_stakeId, tokenStaking.sessionId, _cityId, _buildingId, nonce, msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(_stakeId, tokenStaking.sessionId, _cityId, _buildingId, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, v, sig[0], sig[1]);
 
-            // require(recover == verifier, "Verification failed about stakeToken");
+            require(recover == verifier, "Verification failed about stakeToken");
         }
 
-        ++nonce;
+        nonce[msg.sender]++;
 
         deposit(stakeKey, msg.sender, _amount);
 
@@ -160,7 +160,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         token.safeTransferFrom(msg.sender, address(this), _amount);
 
-        emit StakeToken(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, nonce);
+        emit StakeToken(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, nonce[msg.sender]);
     }
 
 
@@ -192,14 +192,14 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce, msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, sig[0], sig[1]);
 
-            // require(recover == verifier, "Verification failed about stakeNft");
+            require(recover == verifier, "Verification failed about stakeNft");
         }
 
-        ++nonce;
+        nonce[msg.sender];
 
         nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
 
@@ -248,14 +248,14 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _bonusPercent, nonce, msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _bonusPercent, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, _r, _s);
 
-            // require(recover == verifier, "Verification failed about getBonus");
+            require(recover == verifier, "Verification failed about getBonus");
         }
 
-        ++nonce;
+        nonce[msg.sender];
 
         return true;
     }

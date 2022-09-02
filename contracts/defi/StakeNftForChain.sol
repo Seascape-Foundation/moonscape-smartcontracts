@@ -12,7 +12,6 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
     uint public sessionId;
     IERC721 public nft;
     address public verifier;
-    uint public nonce;
 
  // The Staking is Time based.
     struct Session {
@@ -22,6 +21,7 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
     }
 
     mapping(uint => Session) public sessions;
+    mapping(address => uint) public nonce;
 
 
 
@@ -55,14 +55,14 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce, msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, sig[0], sig[1]);
 
-            // require(recover == verifier, "Verification failed about stakeNft");
+            require(recover == verifier, "Verification failed about stakeNft");
         }
 
-        ++nonce;
+        nonce[msg.sender];
 
         nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
 

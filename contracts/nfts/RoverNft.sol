@@ -43,7 +43,7 @@ contract RoverNft is ERC721, ERC721Burnable, Ownable {
     }
 
     function unsetMinter(address _minter) public onlyOwner {
-        require(!minters[_minter], "already a minter");
+        require(minters[_minter], "not a minter");
 
         delete minters[_minter];
 
