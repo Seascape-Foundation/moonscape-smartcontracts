@@ -60,15 +60,15 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusPercent, address rewardToken, address indexed staker, uint time);
     event TokenChangeMoondust(uint indexed sessionId, uint typeId, address indexed tokenAddress, uint ration , uint amount,address indexed staker, uint time);
 
-    constructor (address _nftAddress) public {
-        require(_nftAddress != address(0), "Nft can't be zero address");
+    constructor (address _scapeNftAddress) public {
+        require(_scapeNftAddress != address(0), "MoonscapeDefi: ScapeNft can't be zero address");
 
-        nft = SeascapeNft(_nftAddress);
+        nft = SeascapeNft(_scapeNftAddress);
     }
 
     /// @dev start a new session
     function startSession(uint _startTime, uint _endTime, address _verifier) external onlyOwner{
-        require(validSessionTime(_startTime, _endTime), "INVALID_SESSION_TIME");
+        require(validSessionTime(_startTime, _endTime), "MoonscapeDefi:  Invalid session time");
         require(_verifier != address(0), "MoonscapeDefi: Verifier can't be zero address");
 
         sessionId++;
@@ -83,7 +83,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     function pauseSession(uint _sessionId) external onlyOwner{
         Session storage session = sessions[_sessionId];
 
-        require(session.active, "INACTIVE");
+        require(session.active, "MoonscapeDefi: INACTIVE");
 
         session.active = false;
 
@@ -94,7 +94,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     function resumeSession(uint _sessionId) external onlyOwner{
         Session storage session = sessions[_sessionId];
 
-        require(session.endTime > 0 && !session.active, "ACTIVE");
+        require(session.endTime > 0 && !session.active, "MoonscapeDefi: ACTIVE");
 
         session.active = true;
 
@@ -105,7 +105,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     function addTokenStaking(uint _sessionId, address stakeAddress, uint rewardPool, address rewardToken, bool _burn) external onlyOwner{
         bytes32 key = keccak256(abi.encodePacked(_sessionId, stakeAddress, rewardToken));
 
-        require(!addedStakings[key], "DUPLICATE_STAKING");
+        require(!addedStakings[key], "MoonscapeDefi: DUPLICATE_STAKING");
 
         addedStakings[key] = true;
 
@@ -136,10 +136,10 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         // validate the session id
         bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
 
-        require(isActive(stakeKey), "session not active");
+        require(isActive(stakeKey), "MoonscapeDefi: session not active");
 
         //validate stake id
-        require(_stakeId <= stakeId,"do not have this stakeId");
+        require(_stakeId <= stakeId,"MoonscapeDefi: do not have this stakeId");
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
@@ -147,7 +147,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, v, sig[0], sig[1]);
 
-            require(recover == verifier, "Verification failed about stakeToken");
+            require(recover == verifier, "MoonscapeDefi: Verification failed about stakeToken");
         }
 
         nonce[msg.sender]++;
@@ -156,7 +156,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         IERC20 token = IERC20(tokenStaking.stakeToken);
 
-        require(token.balanceOf(msg.sender) >= _amount, "Not enough token to stake");
+        require(token.balanceOf(msg.sender) >= _amount, "MoonscapeDefi: Not enough token to stake");
 
         token.safeTransferFrom(msg.sender, address(this), _amount);
 
@@ -171,24 +171,24 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     {
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
-        require(isActive(stakeKey), "session is ended, only unstake");
+        require(isActive(stakeKey), "MoonscapeDefi: session is ended, only unstake");
 
         return reward(stakeKey, msg.sender);
     }
 
-    /// @dev stake nft
+    /// @dev stake seascapeNft
     function importNft(uint _stakeId, uint _cityId, uint _buildingId, uint _scapeNftId, uint8 _v, bytes32[2] calldata sig) external {
         TokenStaking storage tokenStaking = tokenStakings[_stakeId];
 
         // validate the session id
         bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
 
-        require(isActive(stakeKey), "session not active");
+        require(isActive(stakeKey), "MoonscapeDefi: session not active");
 
         //validate stake id
-        require(_stakeId <= stakeId, "do not have this stakeId");
+        require(_stakeId <= stakeId, "MoonscapeDefi: do not have this stakeId");
 
-        require(nft.ownerOf(_scapeNftId) == msg.sender, "not owned");
+        require(nft.ownerOf(_scapeNftId) == msg.sender, "MoonscapeDefi: not owned");
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
@@ -196,10 +196,10 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, sig[0], sig[1]);
 
-            require(recover == verifier, "Verification failed about stakeNft");
+            require(recover == verifier, "MoonscapeDefi: Verification failed about stakeNft");
         }
 
-        nonce[msg.sender];
+        nonce[msg.sender]++;
 
         nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
 
@@ -244,7 +244,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
-        require(receiveBonus[stakeKey][msg.sender] == false, "already rewarded");
+        require(receiveBonus[stakeKey][msg.sender] == false, "MoonscapeDefi: already rewarded");
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
@@ -252,10 +252,10 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, _r, _s);
 
-            require(recover == verifier, "Verification failed about getBonus");
+            require(recover == verifier, "MoonscapeDefi: Verification failed about getBonus");
         }
 
-        nonce[msg.sender];
+        nonce[msg.sender]++;
 
         return true;
     }
@@ -297,16 +297,16 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             IERC20 _rewardToken = IERC20(_token);
 
             uint _balance = _rewardToken.balanceOf(address(this));
-            require(_amount <= _balance, "do not have enough token to reward");
+            require(_amount <= _balance, "MoonscapeDefi: Do not have enough token to reward");
 
             uint _beforBalance = _rewardToken.balanceOf(_to);
             _rewardToken.transfer(_to, _amount);
 
-            require(_rewardToken.balanceOf(_to) == _beforBalance + _amount, "Invalid transfer");
+            require(_rewardToken.balanceOf(_to) == _beforBalance + _amount, "MoonscapeDefi: Invalid transfer");
         } else {
 
             uint _balance = address(this).balance;
-            require(_amount <= _balance, "do not have enough token to reward");
+            require(_amount <= _balance, "MoonscapeDefi: Do not have enough token to reward");
 
             payable(_to).transfer(_amount);
         }
