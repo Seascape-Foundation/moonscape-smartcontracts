@@ -54,7 +54,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event AddStaking(uint indexed sessionId, uint indexed stakeId);
     event StakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed amount, uint nonce);
     event UnStakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed amount);
-    event ImportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time);
+    event ImportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time, uint chainId);
     event ExportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed scapeNftId, uint time);
     event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusPercent, address staker, uint time);
     event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusPercent, address rewardToken, address indexed staker, uint time);
@@ -188,6 +188,11 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         //validate stake id
         require(_stakeId <= stakeId, "MoonscapeDefi: do not have this stakeId");
 
+        uint chainId;   
+        assembly {
+            chainId := chainid()
+        }
+
         require(nft.ownerOf(_scapeNftId) == msg.sender, "MoonscapeDefi: not owned");
 
         {
@@ -201,9 +206,9 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         nonce[msg.sender]++;
 
-        nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
+        nft.safeTransferFrom(msg.sender, dead, _scapeNftId);
 
-        emit ImportNft(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp);
+        emit ImportNft(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
 
     }
 

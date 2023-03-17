@@ -26,7 +26,7 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
 
 
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
-    event ImportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time);
+    event ImportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time, uint chainId);
 
     constructor (address _nft) public {
     	require(_nft != address(0), "StakeNft: Nft can't be zero address");
@@ -53,6 +53,11 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
 
         require(nft.ownerOf(_scapeNftId) == msg.sender, "not owner");
 
+        uint chainId;   
+        assembly {
+            chainId := chainid()
+        }
+
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
             bytes32 message         = keccak256(abi.encodePacked(sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce[msg.sender], msg.sender));
@@ -62,11 +67,11 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
             require(recover == verifier, "Verification failed about stakeNft");
         }
 
-        nonce[msg.sender];
+        nonce[msg.sender]++;
 
         nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
 
-        emit ImportNft(msg.sender, sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp);
+        emit ImportNft(msg.sender, sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
     }
 
 
