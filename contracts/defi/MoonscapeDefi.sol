@@ -19,6 +19,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
     uint public sessionId;
     uint public stakeId;
+    uint public typeId;
     address public verifier;
 
     struct Session {
@@ -29,15 +30,11 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
     struct TokenStaking {
         uint sessionId;
-        address stakeToken;   // staked token address
+        address stakeToken;   // staked token or nft address
         uint rewardPool;      // reward token number
         address rewardToken;  // reward token address
         bool burn;
-    }
-
-    struct TokenChange {
-        address tokenAddress;
-        uint    ration;
+        uint typePool;
     }
 
     mapping(uint => Session) public sessions;
@@ -45,7 +42,9 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     mapping(uint => TokenStaking) public tokenStakings;         //uint stakeId => TokenStaking
     mapping(bytes32 => uint) public keyToId;                    //bytes32 key(stakeKeyOf(sessionId,stakeId)  => stakeId
     mapping(bytes32 => mapping(address => bool)) public receiveBonus; //bytes32 key(stakeKeyOf(sessionId,stakeId)=> weallet address => bool
-    mapping(uint => mapping(uint => TokenChange)) public changeMoondust; //sessionId => typeId => TokenChange
+    mapping(uint256 => address) public changeToken;
+
+    mapping(address => bool) public changeAllowed;
     mapping(address => uint) public nonce;
 
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
@@ -58,7 +57,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event ExportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed scapeNftId, uint time);
     event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusPercent, address staker, uint time);
     event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusPercent, address rewardToken, address indexed staker, uint time);
-    event TokenChangeMoondust(uint indexed sessionId, uint typeId, address indexed tokenAddress, uint ration , uint amount,address indexed staker, uint time);
+    event TokenBuyPack(uint indexed sessionId, uint typeId, uint amount, uint packId, address indexed staker, uint time);
 
     constructor (address _scapeNftAddress) public {
         require(_scapeNftAddress != address(0), "MoonscapeDefi: ScapeNft can't be zero address");
@@ -102,7 +101,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     }
 
     /// @dev add token staking to session
-    function addTokenStaking(uint _sessionId, address stakeAddress, uint rewardPool, address rewardToken, bool _burn) external onlyOwner{
+    function addTokenStaking(uint _sessionId, address stakeAddress, uint rewardPool, address rewardToken, bool _burn, uint _typePool) external onlyOwner{
         bytes32 key = keccak256(abi.encodePacked(_sessionId, stakeAddress, rewardToken));
 
         require(!addedStakings[key], "MoonscapeDefi: DUPLICATE_STAKING");
@@ -110,7 +109,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         addedStakings[key] = true;
 
         //burn = true, the nft will burn;
-        tokenStakings[++stakeId] = TokenStaking(_sessionId, stakeAddress, rewardPool, rewardToken, _burn);
+        tokenStakings[++stakeId] = TokenStaking(_sessionId, stakeAddress, rewardPool, rewardToken, _burn, _typePool);
 
         bytes32 stakeKey = stakeKeyOf(sessionId, stakeId);
 
@@ -163,7 +162,6 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         emit StakeToken(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, nonce[msg.sender]);
     }
 
-
     /// @dev claim rewards
     function claim(uint _sessionId, uint _stakeId)
         external
@@ -209,7 +207,6 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         nft.safeTransferFrom(msg.sender, dead, _scapeNftId);
 
         emit ImportNft(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
-
     }
 
 
@@ -317,51 +314,49 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
         }
     }
 
-
-    /// @dev Add token exchange type moondust
-    function addTokenChangeMoondustType(uint _sessionId, uint _typeId, address _token, uint _ration) public onlyOwner{
-        require(_ration > 0, "MoonscapeDefi: The conversion ratio cannot be less than zero!");
-
-        Session storage session = sessions[_sessionId];
-        require(session.active, "MoonscapeDefi: Session Inactive!");
-
-        TokenChange storage tokenChange = changeMoondust[_sessionId][_typeId];
-        require(tokenChange.tokenAddress != _token, "MoonscapeDefi: The exchange token address exists!");
-
-        changeMoondust[_sessionId][_typeId] = TokenChange(_token, _ration);
-    }
-
-
-    /// @dev Change the token exchange moondust ratio
-    function setRatio(uint _sessionId, uint _typeId, uint _ration) public onlyOwner{
-        require(_ration > 0, "MoonscapeDefi: The conversion ratio cannot be less than zero!");
-
-        Session storage session = sessions[_sessionId];
-        require(session.active, "MoonscapeDefi: Session Inactive!");
-
-        TokenChange storage tokenChange = changeMoondust[_sessionId][_typeId];
-
-        tokenChange.ration = _ration;
-    }
-
-
     /// @dev Token for moondust
-    function tokenChangeMoondust(uint _sessionId, uint _typeId, uint _amount) public{
+    function tokenBuyPack(uint _sessionId, uint _typeId, uint _amount, uint _packId, uint8 _v, bytes32 _r, bytes32 _s ) public{
         require(_amount > 0, "MoonscapeDefi: The exchange amount cannot be less than zero!");
 
+        address _tokenAddress = changeToken[_typeId];
+        require(changeAllowed[_tokenAddress], "MoonscapeDefi: This token is not allowed");
+
         Session storage session = sessions[_sessionId];
         require(session.active, "MoonscapeDefi: Session Inactive!");
 
-        TokenChange storage tokenChange = changeMoondust[_sessionId][_typeId];
+        {
+            bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
+            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _typeId, _amount, _packId, address(this), nonce[msg.sender], msg.sender));
+            bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
+            address recover         = ecrecover(hash, _v, _r, _s);
 
-        IERC20 token = IERC20(tokenChange.tokenAddress);
+            require(recover == verifier, "MoonscapeDefi: Verification failed about getBonus");
+        }
 
+        nonce[msg.sender]++;
+
+        IERC20 token = IERC20(_tokenAddress);
         token.safeTransferFrom(msg.sender, address(this), _amount);
 
-        emit TokenChangeMoondust(_sessionId, _typeId, tokenChange.tokenAddress, tokenChange.ration ,_amount, msg.sender, block.timestamp);
-
+        emit TokenBuyPack(_sessionId, _typeId, _amount, _packId, msg.sender, block.timestamp);
     }
 
+    //////////////////////////////////////////////////////////////////////////
+    //
+    // Only owner
+    //
+    //////////////////////////////////////////////////////////////////////////
+
+    /// @dev Add token exchange type moondust
+    function addTokenChangeMoondustType(address _token) public onlyOwner{
+        Session storage session = sessions[sessionId];
+        require(session.active, "MoonscapeDefi: Session Inactive!");
+        require(!changeAllowed[_token], "MoonscapeDefi: This token is added!");
+
+        changeAllowed[_token] = true;
+        changeToken[typeId] = _token;
+        typeId++;
+    }
 
     //////////////////////////////////////////////////////////////////////////
     //
