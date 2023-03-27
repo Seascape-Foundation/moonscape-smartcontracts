@@ -15,6 +15,7 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     uint256 private constant scaler = 10**18;
 
     address MSCP;
+    address USDC;
     address cityNft;
     address roverNft;
     address scapeNft;
@@ -42,15 +43,15 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     /// @dev userAddress => uint
     mapping(address => uint) public nonce;
 
-    event Spent(address indexed spender, uint256 amount, uint256 spentTime, uint256 totalSpent);
+    event Spent(address indexed spender, uint256 tokenId, uint256 amount, uint256 packageId, uint256 spentTime);
     event Stake(address indexed staker, uint256 amount, uint256 stakeTime, uint256 stakeAmount);
     event Unstake(address indexed staker, uint256 amount, uint256 unstakeTime, uint256 stakeAmount);
 
     event ImportCity(address indexed staker, uint indexed id, uint time);
     event ExportCity(address indexed staker, uint indexed id, uint time);
     event MintCity(uint indexed sessionId, uint indexed cityId, uint indexed nftId, uint8 category, address staker, uint time);
-    event BurnScapeForBuilding(address indexed staker, uint indexed scapeId, uint sessionId, uint cityId, uint indexed buildingId);
-    event BurnScapeForConnection(address indexed staker, uint indexed scapeId, uint sessionId);
+    event BurnScapeForBuilding(address indexed staker, uint sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint indexed nftId, uint time, uint chainId);
+    // event BurnScapeForConnection(address indexed staker, uint indexed scapeId, uint sessionId);
 
     event ImportRover(address indexed staker, uint indexed id, uint time);
     event ExportRover(address indexed staker, uint indexed id, uint time);
@@ -58,6 +59,7 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
 
     constructor(
         address _mscpToken,
+        address _usdcToken,
         address _cityNft,
         address _roverNft,
         address _scapeNft,
@@ -65,6 +67,7 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
         address _feeTo
     ) public {
         require(_mscpToken != address(0), "MoonscapeGame: mscpToken should not be equal to 0");
+        require(_usdcToken != address(0), "MoonscapeGame: usdcToken should not be equal to 0");
         require(_cityNft != address(0), "MoonscapeGame: cityNft should not be equal to 0");
         require(_roverNft != address(0), "MoonscapeGame: roverNft should not be equal to 0");
         require(_scapeNft != address(0), "MoonscapeGame: scapeNft should not be equal to 0");
@@ -72,6 +75,7 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
         require(_feeTo != address(0), "MoonscapeGame: feeTo should not be equal to 0");
 	
         MSCP = _mscpToken;
+        USDC = _usdcToken;
         cityNft = _cityNft;
         roverNft = _roverNft;
         scapeNft = _scapeNft;
@@ -85,47 +89,67 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     // 
     //////////////////////////////////////////////////////////////////
 
-    function purchaseMoondust(uint256 _amount) external {
+    function purchaseMoondust(uint256 _tokenId, uint256 _amount, uint256 _packageId, uint8 _v, bytes32 _r, bytes32 _s) external {
         require(_amount > 0, "MoonscapeGame: invalid spend amount");
 
-        IERC20 _token = IERC20(MSCP);
+        address token;
+        if(_tokenId == 0) {
+            token = MSCP;
+        } else if(_tokenId == 1){
+            token = USDC;
+        }
+
+        //Verifier VRS
+        {
+            bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
+            bytes32 message         = keccak256(abi.encodePacked(_tokenId, _amount, _packageId, address(this), nonce[msg.sender], msg.sender));
+            bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
+            address recover         = ecrecover(hash, _v, _r, _s);
+
+            require(recover == verifier, "MoonscapeDefi: Verification failed about spent");
+        }
+
+        IERC20 _token = IERC20(token);
         require(_token.balanceOf(msg.sender) >= _amount, "MoonscapeGame: not enough tokens to deposit");
         require(_token.transferFrom(msg.sender, feeTo, _amount), "MoonscapeGame: transfer of tokens to contract failed");
+
+
+        nonce[msg.sender]++;
 
         Balance storage _balance  = balances[msg.sender];
         _balance.totalSpent = _amount.add(_balance.totalSpent);
 
-        emit Spent(msg.sender, _amount, block.timestamp, _balance.totalSpent);
+        emit Spent(msg.sender, _tokenId, _amount, _packageId, block.timestamp);
     }
 
-    function stakeForMoondust(uint256 _amount) external {
-        require(_amount > 0, "MoonscapeGame: invalid spend amount");
+    // function stakeForMoondust(uint256 _amount) external {
+    //     require(_amount > 0, "MoonscapeGame: invalid spend amount");
 
-        IERC20 _token = IERC20(MSCP);
-        require(_token.balanceOf(msg.sender) >= _amount, "MoonscapeGame: not enough tokens to deposit");
-        require(_token.transferFrom(msg.sender, address(this), _amount), "MoonscapeGame: transfer of tokens to contract failed");
+    //     IERC20 _token = IERC20(MSCP);
+    //     require(_token.balanceOf(msg.sender) >= _amount, "MoonscapeGame: not enough tokens to deposit");
+    //     require(_token.transferFrom(msg.sender, address(this), _amount), "MoonscapeGame: transfer of tokens to contract failed");
 
-        Balance storage _balance  = balances[msg.sender];
-        _balance.stakeAmount = _amount.add(_balance.stakeAmount);
+    //     Balance storage _balance  = balances[msg.sender];
+    //     _balance.stakeAmount = _amount.add(_balance.stakeAmount);
 
-        emit Stake(msg.sender, _amount, block.timestamp, _balance.stakeAmount);
-    }
+    //     emit Stake(msg.sender, _amount, block.timestamp, _balance.stakeAmount);
+    // }
 
-    function unstakeForMoondust(uint256 _amount) external {
-        require(_amount > 0, "MoonscapeGame: invalid spend amount");
+    // function unstakeForMoondust(uint256 _amount) external {
+    //     require(_amount > 0, "MoonscapeGame: invalid spend amount");
 
-        Balance storage _balance  = balances[msg.sender];
-        require(_amount <= _balance.stakeAmount, "MoonscapeGame: can't unstake more than staked");
+    //     Balance storage _balance  = balances[msg.sender];
+    //     require(_amount <= _balance.stakeAmount, "MoonscapeGame: can't unstake more than staked");
 
-        IERC20 _token = IERC20(MSCP);
-        require(_token.balanceOf(address(this)) >= _amount, "MoonscapeGame: insufficient contract balance");
+    //     IERC20 _token = IERC20(MSCP);
+    //     require(_token.balanceOf(address(this)) >= _amount, "MoonscapeGame: insufficient contract balance");
 
-        require(_token.transfer(msg.sender, _amount), "MoonscapeGame: Failed to transfer token from contract to user");
+    //     require(_token.transfer(msg.sender, _amount), "MoonscapeGame: Failed to transfer token from contract to user");
 
-        _balance.stakeAmount = _balance.stakeAmount.sub(_amount);
+    //     _balance.stakeAmount = _balance.stakeAmount.sub(_amount);
 
-        emit Unstake(msg.sender, _amount, block.timestamp, _balance.stakeAmount);
-    }
+    //     emit Unstake(msg.sender, _amount, block.timestamp, _balance.stakeAmount);
+    // }
 
 
     ////////////////////////////////////////
@@ -183,16 +207,22 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     /////////////////////////////////////////////////////////////////
 
     function burnScapeForBuilding(uint _sessionId, uint _stakeId, uint _cityId, uint _buildingId, uint _scapeNftId, uint _power, uint8 _v, bytes32[2] calldata sig) external {
-        require(buildingScapeBurns[_sessionId][msg.sender][_buildingId] == 0, "MoonscapeGame: Already burnt");
+        // require(buildingScapeBurns[_sessionId][msg.sender][_buildingId] == 0, "MoonscapeGame: Already burnt");
         require(_sessionId > 0, "MoonscapeGame: invalid sessionId");
-        {   // avoid stack too deep
+        {   
+        // avoid stack too deep
         // investor, project verification
 	    bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-	    bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, _power));
+	    bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, _power, nonce[msg.sender], msg.sender));
 	    bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
 	    address recover         = ecrecover(hash, _v, sig[0], sig[1]);
 
 	    require(recover == verifier, "MoonscapeGame: sig failed about burnScapeForBuilding");
+        }
+
+        uint chainId;   
+        assembly {
+            chainId := chainid()
         }
 
         CityNft nft = CityNft(scapeNft);
@@ -202,30 +232,31 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
 
         buildingScapeBurns[_sessionId][msg.sender][_buildingId] = _scapeNftId;
 
-        emit BurnScapeForBuilding(msg.sender, _scapeNftId, _sessionId, _cityId, _buildingId);
+        nonce[msg.sender]++;
+        emit BurnScapeForBuilding(msg.sender, _sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
     }
 
-    function burnScapeForConnection(uint _sessionId, uint _scapeNftId, uint8 _v, bytes32 _r, bytes32 _s) external {
-        require(connectionScapeBurns[_sessionId][msg.sender] == 0, "Already burnt");
-        require(_sessionId > 0, "invalid sessionId");
+    // function burnScapeForConnection(uint _sessionId, uint _scapeNftId, uint8 _v, bytes32 _r, bytes32 _s) external {
+    //     require(connectionScapeBurns[_sessionId][msg.sender] == 0, "Already burnt");
+    //     require(_sessionId > 0, "invalid sessionId");
 
-        {   // avoid stack too deep
-        // investor, project verification
-	    bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-	    bytes32 message         = keccak256(abi.encodePacked(msg.sender, _scapeNftId, _sessionId));
-	    bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
-	    address recover         = ecrecover(hash, _v, _r, _s);
+    //     {   // avoid stack too deep
+    //     // investor, project verification
+	   //  bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
+	   //  bytes32 message         = keccak256(abi.encodePacked(msg.sender, _scapeNftId, _sessionId));
+	   //  bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
+	   //  address recover         = ecrecover(hash, _v, _r, _s);
 
-	    require(recover == verifier, "MoonscapeGame: sig error");
-        }
+	   //  require(recover == verifier, "MoonscapeGame: sig error");
+    //     }
 
-        CityNft nft = CityNft(scapeNft);
-        nft.safeTransferFrom(msg.sender, dead, _scapeNftId);
+    //     CityNft nft = CityNft(scapeNft);
+    //     nft.safeTransferFrom(msg.sender, dead, _scapeNftId);
 
-        connectionScapeBurns[_sessionId][msg.sender] = _scapeNftId;
+    //     connectionScapeBurns[_sessionId][msg.sender] = _scapeNftId;
 
-        emit BurnScapeForConnection(msg.sender, _scapeNftId, _sessionId);
-    }
+    //     emit BurnScapeForConnection(msg.sender, _scapeNftId, _sessionId);
+    // }
 
     /////////////////////////////////////////////////////////////
     //
