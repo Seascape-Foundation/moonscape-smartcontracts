@@ -17,16 +17,13 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
     struct Session {
         uint startTime;
         uint endTime;
-        bool active;    // check session is active or not
     }
 
     mapping(uint => Session) public sessions;
     mapping(address => uint) public nonce;
 
-
-
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
-    event ImportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time, uint chainId);
+    event BurnScapeForBuilding(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed scapeNftId, uint time, uint chainId);
 
     constructor (address _nft) public {
     	require(_nft != address(0), "StakeNft: Nft can't be zero address");
@@ -39,7 +36,7 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
 
         sessionId++;
 
-        sessions[sessionId] = Session(_startTime, _endTime, true);
+        sessions[sessionId] = Session(_startTime, _endTime);
         verifier            = _verifier;
 
         emit StartSession(sessionId, _startTime, _endTime);
@@ -47,31 +44,30 @@ contract StakeNftForChain is Ownable, IERC721Receiver {
 
 
 /// @dev stake nft
-    function importNft(uint _stakeId, uint _cityId, uint _buildingId, uint _scapeNftId, uint8 _v, bytes32[2] calldata sig) external {
-
-        require(isActive(sessionId), "session not active");
-
-        require(nft.ownerOf(_scapeNftId) == msg.sender, "not owner");
-
-        uint chainId;   
-        assembly {
-            chainId := chainid()
-        }
+    function burnScapeForBuilding(uint _sessionId, uint _stakeId, uint _cityId, uint _buildingId, uint _scapeNftId, uint _power, uint8 _v, bytes32[2] calldata sig) external {
+        require(isActive(_sessionId), "session not active");
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, nonce[msg.sender], msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, _power, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, sig[0], sig[1]);
 
             require(recover == verifier, "Verification failed about stakeNft");
         }
 
+        uint chainId;   
+        assembly {
+            chainId := chainid()
+        }
+
+        require(nft.ownerOf(_scapeNftId) == msg.sender, "not owner");
+
         nonce[msg.sender]++;
 
         nft.safeTransferFrom(msg.sender, 0x000000000000000000000000000000000000dEaD, _scapeNftId);
 
-        emit ImportNft(msg.sender, sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
+        emit BurnScapeForBuilding(msg.sender, sessionId, _stakeId, _cityId, _buildingId, _scapeNftId, block.timestamp, chainId);
     }
 
 

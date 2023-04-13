@@ -12,28 +12,33 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    uint public sessionId;
+    uint private typeId;
     uint256 private constant scaler = 10**18;
 
-    address MSCP;
-    address USDC;
-    address cityNft;
-    address roverNft;
-    address scapeNft;
-
+    address private cityNft;
+    address private roverNft;
+    address private scapeNft;
+    address public feeTo;
+    address public verifier;
     address private constant dead = 0x000000000000000000000000000000000000dEaD;
 
-    address public verifier;
-
-    address public feeTo;
+    // The Staking is Time based.
+    struct Session {
+        uint startTime;
+        uint endTime;
+    }
 
     struct Balance {
 		uint256 totalSpent;      	// total amount of spend mscp
-		uint256 stakeAmount;        // current amount of staked mscp
+		// uint256 stakeAmount;        // current amount of staked mscp
     }
 
+    mapping(uint => Session) public sessions;
+    mapping(uint => address) public token;
+    mapping(address => bool) public changeAllowed;
     /// @dev userAddress => Balance struct
     mapping(address => Balance) public balances;
-
     mapping(uint => address) public cityOwners;
     mapping(uint => address) public roverOwners;
     /// @dev session id => user => building => scape id
@@ -43,16 +48,13 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     /// @dev userAddress => uint
     mapping(address => uint) public nonce;
 
+    event StartSession(uint indexed sessionId, uint startTime, uint endTime);
+    event AddToken(address indexed tokenAddress, uint256 indexed typeId, uint256 time);
     event Spent(address indexed spender, uint256 tokenId, uint256 amount, uint256 packageId, uint256 spentTime);
-    event Stake(address indexed staker, uint256 amount, uint256 stakeTime, uint256 stakeAmount);
-    event Unstake(address indexed staker, uint256 amount, uint256 unstakeTime, uint256 stakeAmount);
-
+    event BurnScapeForBuilding(address indexed staker, uint sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint indexed nftId, uint time, uint chainId);
     event ImportCity(address indexed staker, uint indexed id, uint time);
     event ExportCity(address indexed staker, uint indexed id, uint time);
     event MintCity(uint indexed sessionId, uint indexed cityId, uint indexed nftId, uint8 category, address staker, uint time);
-    event BurnScapeForBuilding(address indexed staker, uint sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint indexed nftId, uint time, uint chainId);
-    // event BurnScapeForConnection(address indexed staker, uint indexed scapeId, uint sessionId);
-
     event ImportRover(address indexed staker, uint indexed id, uint time);
     event ExportRover(address indexed staker, uint indexed id, uint time);
     event MintRover(uint indexed sessionId, uint indexed id, uint8 _type, address staker, uint time);
@@ -68,19 +70,34 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     ) public {
         require(_mscpToken != address(0), "MoonscapeGame: mscpToken should not be equal to 0");
         require(_usdcToken != address(0), "MoonscapeGame: usdcToken should not be equal to 0");
-        require(_cityNft != address(0), "MoonscapeGame: cityNft should not be equal to 0");
-        require(_roverNft != address(0), "MoonscapeGame: roverNft should not be equal to 0");
-        require(_scapeNft != address(0), "MoonscapeGame: scapeNft should not be equal to 0");
-        require(_verifier != address(0), "MoonscapeGame: verifier should not be equal to 0");
-        require(_feeTo != address(0), "MoonscapeGame: feeTo should not be equal to 0");
+        require(_cityNft   != address(0), "MoonscapeGame: cityNft should not be equal to 0");
+        require(_roverNft  != address(0), "MoonscapeGame: roverNft should not be equal to 0");
+        require(_scapeNft  != address(0), "MoonscapeGame: scapeNft should not be equal to 0");
+        require(_verifier  != address(0), "MoonscapeGame: verifier should not be equal to 0");
+        require(_feeTo     != address(0), "MoonscapeGame: feeTo should not be equal to 0");
 	
-        MSCP = _mscpToken;
-        USDC = _usdcToken;
-        cityNft = _cityNft;
-        roverNft = _roverNft;
-        scapeNft = _scapeNft;
-        verifier = _verifier;
-        feeTo = _feeTo;
+        token[typeId]   = _mscpToken;
+        token[++typeId] = _usdcToken;
+        cityNft         = _cityNft;
+        roverNft        = _roverNft;
+        scapeNft        = _scapeNft;
+        verifier        = _verifier;
+        feeTo           = _feeTo;
+
+        changeAllowed[_mscpToken] = true;
+        changeAllowed[_usdcToken] = true;
+    }
+
+    /// @dev start a new session
+    function startSession(uint _startTime, uint _endTime, address _verifier) external onlyOwner{
+        require(!isActive(_startTime, _endTime), "INVALID_SESSION_TIME");
+
+        sessionId++;
+
+        sessions[sessionId] = Session(_startTime, _endTime);
+        verifier            = _verifier;
+
+        emit StartSession(sessionId, _startTime, _endTime);
     }
 
     //////////////////////////////////////////////////////////////////
@@ -92,12 +109,9 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     function purchaseMoondust(uint256 _tokenId, uint256 _amount, uint256 _packageId, uint8 _v, bytes32 _r, bytes32 _s) external {
         require(_amount > 0, "MoonscapeGame: invalid spend amount");
 
-        address token;
-        if(_tokenId == 0) {
-            token = MSCP;
-        } else if(_tokenId == 1){
-            token = USDC;
-        }
+       
+        address _tokenAddress = token[_tokenId];
+        require(changeAllowed[_tokenAddress], "MoonscapeGame: This token is not allowed");
 
         //Verifier VRS
         {
@@ -106,10 +120,10 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, _r, _s);
 
-            require(recover == verifier, "MoonscapeDefi: Verification failed about spent");
+            require(recover == verifier, "MoonscapeGame: Verification failed about spent");
         }
 
-        IERC20 _token = IERC20(token);
+        IERC20 _token = IERC20(_tokenAddress);
         require(_token.balanceOf(msg.sender) >= _amount, "MoonscapeGame: not enough tokens to deposit");
         require(_token.transferFrom(msg.sender, feeTo, _amount), "MoonscapeGame: transfer of tokens to contract failed");
 
@@ -208,7 +222,8 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
 
     function burnScapeForBuilding(uint _sessionId, uint _stakeId, uint _cityId, uint _buildingId, uint _scapeNftId, uint _power, uint8 _v, bytes32[2] calldata sig) external {
         // require(buildingScapeBurns[_sessionId][msg.sender][_buildingId] == 0, "MoonscapeGame: Already burnt");
-        require(_sessionId > 0, "MoonscapeGame: invalid sessionId");
+        require(isActive(_sessionId), "session not active");
+
         {   
         // avoid stack too deep
         // investor, project verification
@@ -306,6 +321,34 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
         emit MintRover(_sessionId, _nftId, _type, msg.sender, block.timestamp);
     }
 
+    function isActive(uint startTime, uint endTime) internal view returns(bool) {
+        if (startTime == 0) {
+            return false;
+        }
+
+        return (block.timestamp >= startTime && block.timestamp <= endTime);
+    }
+
+    /**
+     * @dev session.startTime <= current time <= session.endTime
+     */
+    function isActive(uint _sessionId) public view returns(bool) {
+        if (_sessionId == 0) return false;
+
+        Session storage period = sessions[_sessionId];
+        return (block.timestamp >= period.startTime && block.timestamp <= period.endTime);
+    }
+
+    //Add tokens that can be exchanged for gold
+    function addToken(address _token) external onlyOwner {
+        require(_token != address(0), "MoonscapeGame: Token can't be zero address");
+        require(!changeAllowed[_token], "MoonscapeGame: This token is exist");
+
+        changeAllowed[_token] = true;
+        token[++typeId] = _token;
+
+        emit AddToken(_token, typeId, block.timestamp);
+    }
 
     /// @dev allow transfer native token in to the contract as reward token
     receive() external payable {
