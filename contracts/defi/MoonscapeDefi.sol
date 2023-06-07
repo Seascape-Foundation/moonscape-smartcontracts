@@ -53,7 +53,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
     event PauseSession(uint indexed sessionId);
     event ResumeSession(uint indexed sessionId);
-    event AddStaking(uint indexed sessionId, uint indexed stakeId);
+    // event AddStaking(uint indexed sessionId, uint indexed stakeId);
     event StakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed amount, uint nonce);
     event UnStakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed amount);
     event ExportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed scapeNftId, uint time);
@@ -124,11 +124,11 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             _rewardPool    
         );
 
-        emit AddStaking(_sessionId, stakeId);
+        // emit AddStaking(_sessionId, stakeId);
     }
 
     /// @dev stake tokens
-    function stakeToken(uint _stakeId, uint _cityId, uint _buildingId, uint _amount, uint8 _v, bytes32[2] calldata sig) external {
+    function stakeToken(uint _stakeId, uint _cityId, uint _buildingId, uint _amount, uint8 _v, bytes32[2] calldata sig) external payable{
         TokenStaking storage tokenStaking = tokenStakings[_stakeId];
 
         // validate the session id
@@ -152,26 +152,38 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         deposit(stakeKey, msg.sender, _amount);
 
-        IERC20 token = IERC20(tokenStaking.stakeToken);
+        if (tokenStaking.stakeToken == address(0x0)) {
 
-        require(token.balanceOf(msg.sender) >= _amount, "MoonscapeDefi: Not enough token to stake");
+            require (_amount > msg.value, "MoonscapeDefi: Not enough token to stake");
 
-        token.safeTransferFrom(msg.sender, address(this), _amount);
+            address(this).transfer(_amount);
+        } else {
+            IERC20 token = IERC20(tokenStaking.stakeToken);
+
+            require(token.balanceOf(msg.sender) >= _amount, "MoonscapeDefi: Not enough token to stake");
+
+            token.safeTransferFrom(msg.sender, address(this), _amount);
+        }
 
         emit StakeToken(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, nonce[msg.sender]);
     }
 
     /// @dev unstake tokens
-    function unStakeToken(uint _sessionId, uint _stakeId, uint _amount) public {
+    function unStakeToken(uint _sessionId, uint _stakeId, uint _amount) public payable{
         TokenStaking storage tokenStaking = tokenStakings[_stakeId];
 
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
         withdraw(stakeKey, msg.sender, _amount);
 
-        IERC20 token = IERC20(tokenStaking.stakeToken);
+        if (tokenStaking.stakeToken == address(0x0)) {
 
-        token.safeTransfer(msg.sender, _amount);
+            (msg.sender).transfer(_amount);
+        } else {
+            IERC20 token = IERC20(tokenStaking.stakeToken);
+
+            token.safeTransfer(msg.sender, _amount);
+        }
 
         emit UnStakeToken(msg.sender, _sessionId, _stakeId, _amount);
     }
