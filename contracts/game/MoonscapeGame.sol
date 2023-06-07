@@ -172,25 +172,43 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     //
     ////////////////////////////////////////
 
-    function importCity(uint _id) external {
+    function importCity(uint _id, uint8 _v,  bytes32[2] calldata sig) external {
         require(_id > 0, "MoonscapeGame: NftId can not be 0");
 
         CityNft nft = CityNft(cityNft);
         require(nft.ownerOf(_id) == msg.sender, "MoonscapeGame: Not city owner");
 
+        //verify VRS
+        {
+            bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_id, address(this), nonce[msg.sender], msg.sender));
+            bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
+            address _recover = ecrecover(_message, _v, sig[0], sig[1]);
+            require(_recover == verifier,  "MoonscapeGame: City import verification failed");
+        }
+
         nft.safeTransferFrom(msg.sender, address(this), _id);
         cityOwners[_id] = msg.sender;
+        nonce[msg.sender]++;
 
         emit ImportCity(msg.sender, _id, block.timestamp);
     }
 
-    function exportCity(uint _id) external {
+    function exportCity(uint _id, uint8 _v,  bytes32[2] calldata sig) external {
         require(cityOwners[_id] == msg.sender, "MoonscapeGame: Not the owner");
+
+        //verify VRS
+        {
+            bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_id, address(this), nonce[msg.sender], msg.sender));
+            bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
+            address _recover = ecrecover(_message, _v, sig[0], sig[1]);
+            require(_recover == verifier,  "MoonscapeGame: City export verification failed");
+        }
 
         CityNft nft = CityNft(cityNft);
         nft.safeTransferFrom(address(this), msg.sender, _id);
 
         delete cityOwners[_id];
+        nonce[msg.sender]++;
 
         emit ExportCity(msg.sender, _id, block.timestamp);        
     }
@@ -279,25 +297,43 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
     //
     //////////////////////////////////////////////////////////////
 
-    function importRover(uint _id) external {
+    function importRover(uint _id, uint8 _v, bytes32[2] calldata sig) external {
         require(_id > 0, "0");
 
         CityNft nft = CityNft(roverNft);
         require(nft.ownerOf(_id) == msg.sender, "MoonscapeGame: Not rover owner");
 
+        //verify VRS
+        {
+            bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_id, address(this), nonce[msg.sender], msg.sender));
+            bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
+            address _recover = ecrecover(_message, _v, sig[0], sig[1]);
+            require(_recover == verifier,  "MoonscapeGame: Rover import verification failed");
+        }
+
         nft.safeTransferFrom(msg.sender, address(this), _id);
         roverOwners[_id] = msg.sender;
+        nonce[msg.sender]++;
 
         emit ImportRover(msg.sender, _id, block.timestamp);
     }
 
-    function exportRover(uint _id) external {
+    function exportRover(uint _id, uint8 _v, bytes32[2] calldata sig) external {
         require(roverOwners[_id] == msg.sender, "MoonscapeGame: Not the owner");
+
+        //verify VRS
+        {
+            bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_id, address(this), nonce[msg.sender], msg.sender));
+            bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
+            address _recover = ecrecover(_message, _v, sig[0], sig[1]);
+            require(_recover == verifier,  "MoonscapeGame: Rover export verification failed");
+        }
 
         CityNft nft = CityNft(roverNft);
         nft.safeTransferFrom(address(this), msg.sender, _id);
 
         delete roverOwners[_id];
+        nonce[msg.sender]++;
 
         emit ExportRover(msg.sender, _id, block.timestamp);        
     }
@@ -355,18 +391,10 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
         // React to receiving ether
     }
 
+  
     /// @dev encrypt token data
     /// @return encrypted data
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    )
-        external
-        override
-        returns (bytes4)
-    {
-        return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
+    function onERC721Received(address, address, uint256, bytes calldata) external override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
