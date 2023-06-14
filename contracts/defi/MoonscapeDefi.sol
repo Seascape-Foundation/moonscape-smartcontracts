@@ -57,8 +57,8 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event StakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed amount, uint nonce);
     event UnStakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed amount);
     event ExportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed scapeNftId, uint time);
-    event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusPercent, address staker, uint time);
-    event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusPercent, address rewardToken, address indexed staker, uint time);
+    event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusAmount, address staker, uint time);
+    event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusAmount, address rewardToken, address indexed staker, uint time);
     event StakeNft(address indexed staker, uint indexed stakeId, uint cityId, uint buildingId, uint nft1, uint nft2, uint nft3);
     event UnStakeNft(address indexed staker, uint indexed stakeId, uint nft);
     event UnStakeAllNfts(address indexed staker, uint indexed stakeId, uint nft, uint power);
@@ -312,24 +312,24 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     }
 
     /// @dev withdraw all
-    function withdrawAll(uint _stakeId, uint _cityId, uint _buildingId, uint _amount, uint _bonusPercent, uint8 _v, bytes32 _r, bytes32 _s) external {
+    function withdrawAll(uint _stakeId, uint _cityId, uint _buildingId, uint _amount, uint _bonusAmount, uint8 _v, bytes32 _r, bytes32 _s) external {
         TokenStaking storage tokenStaking = tokenStakings[_stakeId];
         Session storage session = sessions[tokenStaking.sessionId];
 
         bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
 
-        if(block.timestamp > session.endTime) {
-            require(verifyBonus(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _bonusPercent, _v, _r, _s));
-            require(giveBonus(tokenStaking.sessionId, _stakeId, tokenStaking.rewardToken, _bonusPercent));
+        if(block.timestamp > session.endTime && _bonusAmount > 0) {
+            require(verifyBonus(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _bonusAmount, _v, _r, _s));
+            require(giveBonus(tokenStaking.sessionId, _stakeId, tokenStaking.rewardToken, _bonusAmount));
         }
 
         unStakeToken(tokenStaking.sessionId, _stakeId, _amount);
 
-        emit WithdrawAll(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, _bonusPercent, msg.sender, block.timestamp);
+        emit WithdrawAll(tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, _bonusAmount, msg.sender, block.timestamp);
     }
 
     /// @dev verify Bonus
-    function verifyBonus(uint _sessionId, uint _stakeId, uint _cityId, uint _buildingId, uint _bonusPercent, uint8 _v, bytes32 _r, bytes32 _s) internal returns(bool) {
+    function verifyBonus(uint _sessionId, uint _stakeId, uint _cityId, uint _buildingId, uint _bonusAmount, uint8 _v, bytes32 _r, bytes32 _s) internal returns(bool) {
 
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
@@ -337,7 +337,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         {
             bytes memory prefix     = "\x19Ethereum Signed Message:\n32";
-            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _bonusPercent, nonce[msg.sender], msg.sender));
+            bytes32 message         = keccak256(abi.encodePacked(_sessionId, _stakeId, _cityId, _buildingId, _bonusAmount, nonce[msg.sender], msg.sender));
             bytes32 hash            = keccak256(abi.encodePacked(prefix, message));
             address recover         = ecrecover(hash, _v, _r, _s);
 
@@ -350,13 +350,13 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     }
 
     /// @dev get bonus reward after session is ended
-    function giveBonus(uint _sessionId, uint _stakeId, address _rewardToken, uint _bonusPercent) internal returns(bool) {
+    function giveBonus(uint _sessionId, uint _stakeId, address _rewardToken, uint _bonusAmount) internal returns(bool) {
 
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
         IERC20 rewardToken = IERC20(_rewardToken);
 
-        bool res = rewardToken.transferFrom(owner(), msg.sender, _bonusPercent);
+        bool res = rewardToken.transferFrom(owner(), msg.sender, _bonusAmount);
 
         if (!res) {
             return false;
@@ -364,7 +364,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         receiveBonus[stakeKey][msg.sender] = true;
 
-        emit GiveBonus(_sessionId, _stakeId, _bonusPercent, _rewardToken, msg.sender, block.timestamp);
+        emit GiveBonus(_sessionId, _stakeId, _bonusAmount, _rewardToken, msg.sender, block.timestamp);
 
         return true;
     }
