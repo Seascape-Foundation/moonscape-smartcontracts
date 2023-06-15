@@ -51,12 +51,11 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     mapping(bytes32 => mapping(address => Balance[3])) public balances;
 
     event StartSession(uint indexed sessionId, uint startTime, uint endTime);
-    event PauseSession(uint indexed sessionId);
-    event ResumeSession(uint indexed sessionId);
+    // event PauseSession(uint indexed sessionId);
+    // event ResumeSession(uint indexed sessionId);
     // event AddStaking(uint indexed sessionId, uint indexed stakeId);
     event StakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint cityId, uint buildingId, uint indexed amount, uint nonce);
     event UnStakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed amount);
-    event ExportNft(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed scapeNftId, uint time);
     event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusAmount, address staker, uint time);
     event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusAmount, address rewardToken, address indexed staker, uint time);
     event StakeNft(address indexed staker, uint indexed stakeId, uint cityId, uint buildingId, uint nft1, uint nft2, uint nft3);
@@ -86,7 +85,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         session.active = false;
 
-        emit PauseSession(_sessionId);
+        // emit PauseSession(_sessionId);
     }
 
     /// @dev resume session, make it active
@@ -97,7 +96,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         session.active = true;
 
-        emit ResumeSession(_sessionId);
+        // emit ResumeSession(_sessionId);
     }
 
     /// @dev add token staking to session
@@ -148,13 +147,9 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             require(recover == verifier, "MoonscapeDefi: Verification failed about stakeToken");
         }
 
-        nonce[msg.sender]++;
-
-        deposit(stakeKey, msg.sender, _amount);
-
         if (tokenStaking.stakeToken == address(0x0)) {
 
-            require (_amount > msg.value, "MoonscapeDefi: Not enough token to stake");
+            require (_amount == msg.value && address(msg.sender).balance >= msg.value, "MoonscapeDefi: stake value is incorrect");
 
             address(this).transfer(_amount);
         } else {
@@ -164,6 +159,9 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
             token.safeTransferFrom(msg.sender, address(this), _amount);
         }
+
+        deposit(stakeKey, msg.sender, _amount);
+        nonce[msg.sender]++;
 
         emit StakeToken(msg.sender, tokenStaking.sessionId, _stakeId, _cityId, _buildingId, _amount, nonce[msg.sender]);
     }
@@ -184,6 +182,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
             token.safeTransfer(msg.sender, _amount);
         }
+        nonce[msg.sender]++;
 
         emit UnStakeToken(msg.sender, _sessionId, _stakeId, _amount);
     }
@@ -233,7 +232,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
             }         
         }
 
-        ++nonce[msg.sender];
+        nonce[msg.sender]++;
 
         emit StakeNft(msg.sender, _stakeId, _cityId, _buildingId, _nfts[0], _nfts[1], _nfts[2]);
     }
@@ -343,8 +342,6 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
             require(recover == verifier, "MoonscapeDefi: Verification failed about getBonus");
         }
-
-        nonce[msg.sender]++;
 
         return true;
     }
