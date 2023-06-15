@@ -74,7 +74,7 @@ docker-compose down
 
 ## Smart contract address on Moonbase
 
-* Moonscape Defi Address: 0xafFB702b05A8592e329365450057f9C09DeDda38
+* Moonscape Defi Address: 0xF6F0c25e6a30F25cB57d46C66F8d559dB4AB2776
 
   `owner` &ndash; 0xC6EF8A96F20d50E347eD9a1C84142D02b1EFedc0
 
