@@ -58,9 +58,9 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     event UnStakeToken(address indexed staker, uint indexed sessionId, uint stakeId, uint indexed amount);
     event WithdrawAll(uint indexed sessionId, uint indexed stakeId, uint cityId, uint buildingId, uint amount, uint indexed bonusAmount, address staker, uint time);
     event GiveBonus(uint indexed sessionId,uint indexed stakeId, uint bonusAmount, address rewardToken, address indexed staker, uint time);
-    event StakeNft(address indexed staker, uint indexed stakeId, uint cityId, uint buildingId, uint nft1, uint nft2, uint nft3);
-    event UnStakeNft(address indexed staker, uint indexed stakeId, uint nft);
-    event UnStakeAllNfts(address indexed staker, uint indexed stakeId, uint nft, uint power);
+    // event StakeNft(address indexed staker, uint indexed stakeId, uint cityId, uint buildingId, uint nft1, uint nft2, uint nft3);
+    // event UnStakeNft(address indexed staker, uint indexed stakeId, uint nft);
+    // event UnStakeAllNfts(address indexed staker, uint indexed stakeId, uint nft, uint power);
 
     constructor () public { }
 
@@ -188,115 +188,115 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
     }
 
     /// @dev stake city or rover nfts
-    function stakeNft(uint _stakeId, uint _cityId, uint _buildingId, bytes calldata data, uint8 _v, bytes32[2] calldata sig) external {
-        TokenStaking storage tokenStaking = tokenStakings[_stakeId];
+    // function stakeNft(uint _stakeId, uint _cityId, uint _buildingId, bytes calldata data, uint8 _v, bytes32[2] calldata sig) external {
+    //     TokenStaking storage tokenStaking = tokenStakings[_stakeId];
 
-        bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
-        require(isActive(stakeKey), "MoonscapeDefi: session not active");
+    //     bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
+    //     require(isActive(stakeKey), "MoonscapeDefi: session not active");
 
-        Balance[3] storage _balances = balances[stakeKey][msg.sender];
-        (uint256[3] memory _nfts, uint256[3] memory _sp) = abi.decode(data, (uint256[3], uint256[3]));
+    //     Balance[3] storage _balances = balances[stakeKey][msg.sender];
+    //     (uint256[3] memory _nfts, uint256[3] memory _sp) = abi.decode(data, (uint256[3], uint256[3]));
 
-        CityNft nft = CityNft(tokenStaking.stakeToken);
-        // Check whether NFT is stored in the card slot
-        for(uint8 _index = 0; _index < 3; ++_index){
+    //     CityNft nft = CityNft(tokenStaking.stakeToken);
+    //     // Check whether NFT is stored in the card slot
+    //     for(uint8 _index = 0; _index < 3; ++_index){
 
-            require(!(_balances[_index].nftId > 0 && _nfts[_index] > 0), "MoonscapeDefi: this slot is stored");
+    //         require(!(_balances[_index].nftId > 0 && _nfts[_index] > 0), "MoonscapeDefi: this slot is stored");
 
-             if(_nfts[_index] > 0) {
+    //          if(_nfts[_index] > 0) {
 
-                require(nft.ownerOf(_nfts[_index]) == msg.sender, "MoonscapeDefi: Nft is not owned by caller");
-            }
-        }
+    //             require(nft.ownerOf(_nfts[_index]) == msg.sender, "MoonscapeDefi: Nft is not owned by caller");
+    //         }
+    //     }
 
-        //verify VRS
-        {
-            bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_stakeId, _nfts[0], _sp[0], _nfts[1], _sp[1], _nfts[2], _sp[2], nonce[msg.sender], msg.sender));
-            bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
-            address _recover = ecrecover(_message, _v, sig[0], sig[1]);
-            require(_recover == verifier,  "Nft Staking: Seascape points verification failed");
-        }
+    //     //verify VRS
+    //     {
+    //         bytes32 _messageNoPrefix = keccak256(abi.encodePacked(_stakeId, _nfts[0], _sp[0], _nfts[1], _sp[1], _nfts[2], _sp[2], nonce[msg.sender], msg.sender));
+    //         bytes32 _message = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageNoPrefix));
+    //         address _recover = ecrecover(_message, _v, sig[0], sig[1]);
+    //         require(_recover == verifier,  "Nft Staking: Seascape points verification failed");
+    //     }
 
-        // If deposit NFT,Transfer of NFT and change the variable 
-        for (uint8 _index = 0; _index < 3; ++_index) {
+    //     // If deposit NFT,Transfer of NFT and change the variable 
+    //     for (uint8 _index = 0; _index < 3; ++_index) {
 
-            if(_nfts[_index] > 0) {
-                //Deposit nft 
-                nft.safeTransferFrom(msg.sender, address(this), _nfts[_index]);
-                //Change solts num
-                slots[stakeKey][msg.sender] = slots[stakeKey][msg.sender].add(1);
-                //Update balance
-                _balances[_index] = Balance(_nfts[_index], _sp[_index]);
-                //Call the stake deposit and calculate the revenue
-                deposit(stakeKey, msg.sender, _sp[_index]);
-            }         
-        }
+    //         if(_nfts[_index] > 0) {
+    //             //Deposit nft 
+    //             nft.safeTransferFrom(msg.sender, address(this), _nfts[_index]);
+    //             //Change solts num
+    //             slots[stakeKey][msg.sender] = slots[stakeKey][msg.sender].add(1);
+    //             //Update balance
+    //             _balances[_index] = Balance(_nfts[_index], _sp[_index]);
+    //             //Call the stake deposit and calculate the revenue
+    //             deposit(stakeKey, msg.sender, _sp[_index]);
+    //         }         
+    //     }
 
-        nonce[msg.sender]++;
+    //     nonce[msg.sender]++;
 
-        emit StakeNft(msg.sender, _stakeId, _cityId, _buildingId, _nfts[0], _nfts[1], _nfts[2]);
-    }
+    //     emit StakeNft(msg.sender, _stakeId, _cityId, _buildingId, _nfts[0], _nfts[1], _nfts[2]);
+    // }
 
     /// @dev unstake NFT
-    function unStakeNft(uint _stakeId, uint _index) external{
-        require(_index <= 2, "MoonscapeDefi: slot index is invalid");
+    // function unStakeNft(uint _stakeId, uint _index) external{
+    //     require(_index <= 2, "MoonscapeDefi: slot index is invalid");
 
-        TokenStaking storage tokenStaking = tokenStakings[_stakeId];
-        bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
+    //     TokenStaking storage tokenStaking = tokenStakings[_stakeId];
+    //     bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
 
-        Balance storage _balance = balances[stakeKey][msg.sender][_index];
+    //     Balance storage _balance = balances[stakeKey][msg.sender][_index];
 
-        withdraw(stakeKey, msg.sender, _balance.sp);
+    //     withdraw(stakeKey, msg.sender, _balance.sp);
 
-        CityNft nft = CityNft(tokenStaking.stakeToken);
+    //     CityNft nft = CityNft(tokenStaking.stakeToken);
 
-        if(tokenStaking.burn) {
-            nft.safeTransferFrom(address(this), dead, _balance.nftId);
-        } else {
-            nft.safeTransferFrom(address(this), msg.sender, _balance.nftId);
-        }
+    //     if(tokenStaking.burn) {
+    //         nft.safeTransferFrom(address(this), dead, _balance.nftId);
+    //     } else {
+    //         nft.safeTransferFrom(address(this), msg.sender, _balance.nftId);
+    //     }
 
-        slots[stakeKey][msg.sender] = slots[stakeKey][msg.sender].sub(1);
+    //     slots[stakeKey][msg.sender] = slots[stakeKey][msg.sender].sub(1);
 
-        delete balances[stakeKey][msg.sender][_index];
+    //     delete balances[stakeKey][msg.sender][_index];
 
-        emit UnStakeNft(msg.sender, _stakeId, _balance.nftId);
-    }
+    //     emit UnStakeNft(msg.sender, _stakeId, _balance.nftId);
+    // }
 
     //  /// @dev unstake NFTS
-    function unStakeAllNfts(uint _stakeId) external{
-        TokenStaking storage tokenStaking = tokenStakings[_stakeId];
+    // function unStakeAllNfts(uint _stakeId) external{
+    //     TokenStaking storage tokenStaking = tokenStakings[_stakeId];
 
-        bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
+    //     bytes32 stakeKey = stakeKeyOf(tokenStaking.sessionId, _stakeId);
 
-        CityNft nft = CityNft(tokenStaking.stakeToken);
+    //     CityNft nft = CityNft(tokenStaking.stakeToken);
 
-        require(slots[stakeKey][msg.sender] > 0, "MoonscapeDefi: all slots are empty");
+    //     require(slots[stakeKey][msg.sender] > 0, "MoonscapeDefi: all slots are empty");
 
-        for (uint _index = 0; _index < 3; ++_index) {
-            Balance storage _balance = balances[stakeKey][msg.sender][_index];
+    //     for (uint _index = 0; _index < 3; ++_index) {
+    //         Balance storage _balance = balances[stakeKey][msg.sender][_index];
 
-            if (_balance.nftId > 0){
+    //         if (_balance.nftId > 0){
 
-                uint256 _nftId = _balance.nftId;
-                uint256 _sp = _balance.sp;
+    //             uint256 _nftId = _balance.nftId;
+    //             uint256 _sp = _balance.sp;
 
-                withdraw(stakeKey, msg.sender, _sp);
+    //             withdraw(stakeKey, msg.sender, _sp);
                
-                if(tokenStaking.burn) {
-                    nft.safeTransferFrom(address(this), dead, _nftId);
-                } else {
-                    nft.safeTransferFrom(address(this), msg.sender, _nftId);
-                }
+    //             if(tokenStaking.burn) {
+    //                 nft.safeTransferFrom(address(this), dead, _nftId);
+    //             } else {
+    //                 nft.safeTransferFrom(address(this), msg.sender, _nftId);
+    //             }
                 
-                delete balances[stakeKey][msg.sender][_index];
+    //             delete balances[stakeKey][msg.sender][_index];
 
-                emit UnStakeAllNfts(msg.sender, _stakeId, _nftId, _sp);
-            }
-        }
+    //             emit UnStakeAllNfts(msg.sender, _stakeId, _nftId, _sp);
+    //         }
+    //     }
 
-        slots[stakeKey][msg.sender] = 0;
-    }
+    //     slots[stakeKey][msg.sender] = 0;
+    // }
 
     /// @dev claim rewards
     function claim(uint _sessionId, uint _stakeId)
@@ -351,13 +351,7 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         bytes32 stakeKey = stakeKeyOf(_sessionId, _stakeId);
 
-        IERC20 rewardToken = IERC20(_rewardToken);
-
-        bool res = rewardToken.transferFrom(owner(), msg.sender, _bonusAmount);
-
-        if (!res) {
-            return false;
-        }
+        _safeTransfer(_rewardToken,  msg.sender, _bonusAmount);
 
         receiveBonus[stakeKey][msg.sender] = true;
 
@@ -375,7 +369,6 @@ contract MoonscapeDefi is Stake, IERC721Receiver, Ownable {
 
         return true;
     }  
-
 
     function _safeTransfer(address _token, address _to, uint _amount) internal {
         if (_token != address(0)) {
