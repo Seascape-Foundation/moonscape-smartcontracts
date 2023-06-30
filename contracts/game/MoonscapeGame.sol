@@ -386,6 +386,13 @@ contract MoonscapeGame is Ownable, IERC721Receiver {
         emit AddToken(_token, typeId, block.timestamp);
     }
 
+    //Add tokens that can be exchanged for gold
+    function setFeeTo(address _to) external onlyOwner {
+        require(_to != address(0), "MoonscapeGame: To address can't be zero address");
+
+        feeTo = _to;
+    }
+
     /// @dev allow transfer native token in to the contract as reward token
     receive() external payable {
         // React to receiving ether
